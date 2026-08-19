@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#020812"><title>TelemetryPulse Mobile</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;background:#020812;color:#eef6ff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{min-height:100vh;background:radial-gradient(circle at 50% -10%,#0b3b5a 0,#061421 28%,#020812 64%);padding:20px}
+.shell{max-width:520px;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;margin:4px 0 22px}
+.brand{font-weight:950;font-size:25px;letter-spacing:-.04em}.brand span{color:#19d7ff}.badge{font-size:10px;border:1px solid #19405a;border-radius:999px;padding:7px 9px;color:#8da6b9;background:#061421}
+.hero{border:1px solid #173149;border-radius:18px;padding:18px;background:linear-gradient(145deg,#071827,#04111d);margin-bottom:12px}
+.eyebrow{font-size:9px;letter-spacing:1.5px;color:#7790a5;font-weight:900}.status{font-size:23px;font-weight:950;margin-top:6px}.online{color:#2de47f}.offline{color:#ff4e55}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{border:1px solid #173149;border-radius:15px;background:#061421;padding:14px;min-height:92px}
+.label{color:#768ea2;font-size:9px;font-weight:900;letter-spacing:.8px}.value{font-size:20px;font-weight:900;margin-top:8px}.unit{font-size:11px;color:#7b93a7}
+.btn{width:100%;border:0;border-radius:14px;padding:16px;font-size:15px;font-weight:900;margin-top:10px;cursor:pointer}
+.start{background:linear-gradient(90deg,#19d7ff,#2f80ed);color:#00121e}.stop{background:#251016;color:#ff6670;border:1px solid #5c2630}
+.log{border:1px solid #173149;border-radius:14px;background:#03101a;padding:13px;min-height:70px;font-size:11px;color:#8da3b5;line-height:1.5;margin-top:10px}
+.note{font-size:10px;color:#637d91;line-height:1.5;margin-top:12px}
+</style></head>
+<body><div class="shell">
+<div class="top"><div class="brand">TelemetryPulse <span>AI</span></div><div class="badge">MOBILE NODE</div></div>
+<div class="hero"><div class="eyebrow">STATUS DO DISPOSITIVO</div><div id="status" class="status offline">● Offline</div></div>
+<div class="grid">
+<div class="card"><div class="label">LATITUDE</div><div class="value" id="lat">--</div></div>
+<div class="card"><div class="label">LONGITUDE</div><div class="value" id="lon">--</div></div>
+<div class="card"><div class="label">VELOCIDADE</div><div class="value" id="speed">-- <span class="unit">km/h</span></div></div>
+<div class="card"><div class="label">PRECISÃO GPS</div><div class="value" id="accuracy">-- <span class="unit">m</span></div></div>
+<div class="card"><div class="label">ALTITUDE</div><div class="value" id="altitude">-- <span class="unit">m</span></div></div>
+<div class="card"><div class="label">DIREÇÃO</div><div class="value" id="heading">--°</div></div>
+</div>
+<button class="btn start" id="start">▶ Iniciar telemetria</button>
+<button class="btn stop" id="stop">■ Parar telemetria</button>
+<div id="log" class="log">Aguardando início da telemetria...</div>
+<div class="note">Use somente para transmitir a localização deste dispositivo com sua autorização.</div>
+</div>
+<script>
+let watchId=null; const DEVICE_ID="geize-mobile-01"; const API_URL="/telemetry";
+function log(m){document.getElementById("log").textContent=`[${new Date().toLocaleTimeString()}] ${m}`;}
+function setStatus(t,ok){let e=document.getElementById("status");e.textContent=t;e.className="status "+(ok?"online":"offline");}
+async function tx(p){
+ const c=p.coords, kmh=c.speed==null?null:c.speed*3.6;
+ lat.textContent=c.latitude.toFixed(6); lon.textContent=c.longitude.toFixed(6);
+ speed.innerHTML=(kmh==null?"--":kmh.toFixed(1))+' <span class="unit">km/h</span>';
+ accuracy.innerHTML=Math.round(c.accuracy)+' <span class="unit">m</span>';
+ altitude.innerHTML=(c.altitude==null?"--":c.altitude.toFixed(1))+' <span class="unit">m</span>';
+ heading.textContent=c.heading==null?"--°":`${c.heading.toFixed(0)}°`;
+ const body={device_id:DEVICE_ID,latitude:c.latitude,longitude:c.longitude,accuracy:c.accuracy,speed:c.speed,altitude:c.altitude,heading:c.heading,recorded_at:new Date(p.timestamp).toISOString()};
+ try{let r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});if(!r.ok)throw new Error(`HTTP ${r.status}`);let d=await r.json();setStatus("● Transmitindo",true);log(`Posição enviada · ID ${d.telemetry_id}`)}
+ catch(e){setStatus("● Falha de conexão",false);log(`Erro: ${e.message}`)}
+}
+start.onclick=()=>{if(!navigator.geolocation)return log("Geolocalização não suportada.");if(watchId!==null)return log("Telemetria já ativa.");watchId=navigator.geolocation.watchPosition(tx,e=>log(`GPS: ${e.message}`),{enableHighAccuracy:true,maximumAge:0,timeout:15000})}
+stop.onclick=()=>{if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}setStatus("● Parado",false);log("Telemetria interrompida.")}
+</script></body></html>

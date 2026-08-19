@@ -1,0 +1,36 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Database / runtime data
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# Backups
+*_backup.py
+*backup*.py
+
+# IDE
+.vscode/
+.idea/
+
+# Backups web
+*backup*.html
