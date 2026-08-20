@@ -1,7 +1,7 @@
 import sqlite3
 from pathlib import Path
 from math import radians, sin, cos, sqrt, atan2
-
+import requests
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -27,7 +27,7 @@ st_autorefresh(
 
 ROOT = Path(__file__).resolve().parent.parent
 DB = ROOT / "database" / "telemetry.db"
-
+API_BASE_URL = "https://telemetrypulseia.onrender.com"
 
 # =========================================================
 # CSS — OPERATIONAL COMMAND CENTER
@@ -239,6 +239,51 @@ div[data-testid="stDataFrame"]{
 
 @st.cache_data(ttl=1)
 def load_data():
+    """
+    Busca a telemetria diretamente da API pública.
+    O dashboard deixa de depender do SQLite local.
+    """
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/telemetry/history",
+            timeout=15,
+        )
+
+        response.raise_for_status()
+
+        payload = response.json()
+
+        # A API pode retornar {"data": [...]}
+        # ou diretamente uma lista.
+        if isinstance(payload, dict):
+            records = payload.get("data", [])
+        elif isinstance(payload, list):
+            records = payload
+        else:
+            records = []
+
+        if not records:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(records)
+
+        if "id" in df.columns:
+            df = df.sort_values("id")
+
+        return df.reset_index(drop=True)
+
+    except requests.RequestException as exc:
+        st.error(
+            f"Não foi possível conectar ao TelemetryPulse Cloud: {exc}"
+        )
+        return pd.DataFrame()
+
+    except Exception as exc:
+        st.error(
+            f"Erro ao processar telemetria: {exc}"
+        )
+        return pd.DataFrame()
     if not DB.exists():
         return pd.DataFrame()
 

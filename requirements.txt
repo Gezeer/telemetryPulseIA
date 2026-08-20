@@ -4,3 +4,6 @@ streamlit
 pandas
 plotly
 pydantic
+requests
+requests
+streamlit-autorefresh
