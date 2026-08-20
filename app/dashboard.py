@@ -596,13 +596,46 @@ with map_col:
         "posição atual · histórico GPS · rota percorrida",
     )
 
+    # =====================================================
+    # DADOS AUXILIARES DO MAPA
+    # =====================================================
+
+    map_df = df.copy()
+
+    map_df["speed_kmh"] = (
+        pd.to_numeric(map_df["speed"], errors="coerce")
+        .fillna(0)
+        * 3.6
+    )
+
+    map_df["accuracy"] = pd.to_numeric(
+        map_df["accuracy"],
+        errors="coerce",
+    )
+
+    map_df["recorded_at_dt"] = pd.to_datetime(
+        map_df["recorded_at"],
+        errors="coerce",
+        utc=True,
+    )
+
+    map_df["recorded_at_text"] = (
+        map_df["recorded_at_dt"]
+        .dt.tz_convert("America/Sao_Paulo")
+        .dt.strftime("%d/%m/%Y %H:%M:%S")
+    )
+
     fig = go.Figure()
 
-    if len(df) > 1:
+    # =====================================================
+    # ROTA
+    # =====================================================
+
+    if len(map_df) > 1:
         fig.add_trace(
             go.Scattermap(
-                lat=df["latitude"],
-                lon=df["longitude"],
+                lat=map_df["latitude"],
+                lon=map_df["longitude"],
                 mode="lines",
                 line=dict(
                     width=5,
@@ -613,40 +646,71 @@ with map_col:
             )
         )
 
+    # =====================================================
+    # HISTÓRICO GPS
+    # =====================================================
+
+    customdata = list(
+        zip(
+            map_df["speed_kmh"],
+            map_df["accuracy"],
+            map_df["recorded_at_text"],
+        )
+    )
+
     fig.add_trace(
         go.Scattermap(
-            lat=df["latitude"],
-            lon=df["longitude"],
+            lat=map_df["latitude"],
+            lon=map_df["longitude"],
             mode="markers",
             marker=dict(
-                size=6,
+                size=7,
                 color="#2f80ed",
-                opacity=0.35,
+                opacity=0.38,
             ),
+            customdata=customdata,
             name="Histórico",
             hovertemplate=(
+                "<b>LEITURA GPS</b><br>"
                 "Latitude: %{lat:.6f}<br>"
-                "Longitude: %{lon:.6f}"
+                "Longitude: %{lon:.6f}<br>"
+                "Velocidade: %{customdata[0]:.1f} km/h<br>"
+                "Precisão: %{customdata[1]:.1f} m<br>"
+                "Horário: %{customdata[2]}"
                 "<extra></extra>"
             ),
         )
     )
 
-    if len(df) > 1:
+    # =====================================================
+    # INÍCIO DA ROTA
+    # =====================================================
+
+    if len(map_df) > 1:
+        first = map_df.iloc[0]
+
         fig.add_trace(
             go.Scattermap(
-                lat=[float(df.iloc[0]["latitude"])],
-                lon=[float(df.iloc[0]["longitude"])],
+                lat=[float(first["latitude"])],
+                lon=[float(first["longitude"])],
                 mode="markers",
                 marker=dict(
-                    size=15,
+                    size=17,
                     color="#24e58b",
-                    opacity=.95,
+                    opacity=0.95,
                 ),
                 name="Início",
-                hovertemplate="<b>INÍCIO DA SESSÃO</b><extra></extra>",
+                hovertemplate=(
+                    "<b>INÍCIO DA SESSÃO</b><br>"
+                    f"{first['recorded_at_text']}"
+                    "<extra></extra>"
+                ),
             )
         )
+
+    # =====================================================
+    # PULSO DA POSIÇÃO ATUAL
+    # =====================================================
 
     fig.add_trace(
         go.Scattermap(
@@ -654,9 +718,9 @@ with map_col:
             lon=[longitude_now],
             mode="markers",
             marker=dict(
-                size=36,
+                size=42,
                 color="#ff4d5d",
-                opacity=.14,
+                opacity=0.14,
             ),
             name="Pulso",
             hoverinfo="skip",
@@ -664,24 +728,90 @@ with map_col:
         )
     )
 
+    # =====================================================
+    # POSIÇÃO ATUAL
+    # =====================================================
+
+    current_time = (
+        map_df.iloc[-1]["recorded_at_text"]
+        if len(map_df)
+        else "—"
+    )
+
+    current_speed = safe_number(
+        map_df.iloc[-1]["speed_kmh"]
+    )
+
+    current_accuracy = safe_number(
+        map_df.iloc[-1]["accuracy"]
+    )
+
     fig.add_trace(
         go.Scattermap(
             lat=[latitude_now],
             lon=[longitude_now],
             mode="markers",
             marker=dict(
-                size=18,
+                size=20,
                 color="#ff4d5d",
             ),
             name="Posição atual",
+            customdata=[
+                [
+                    current_speed,
+                    current_accuracy,
+                    current_time,
+                ]
+            ],
             hovertemplate=(
-                "<b>Dispositivo atual</b><br>"
+                "<b>DISPOSITIVO AO VIVO</b><br>"
                 "Latitude: %{lat:.6f}<br>"
-                "Longitude: %{lon:.6f}"
+                "Longitude: %{lon:.6f}<br>"
+                "Velocidade: %{customdata[0]:.1f} km/h<br>"
+                "Precisão GPS: %{customdata[1]:.1f} m<br>"
+                "Última leitura: %{customdata[2]}"
                 "<extra></extra>"
             ),
         )
     )
+
+    # =====================================================
+    # ZOOM DINÂMICO
+    # =====================================================
+
+    if len(map_df) > 1:
+        lat_span = (
+            float(map_df["latitude"].max())
+            - float(map_df["latitude"].min())
+        )
+
+        lon_span = (
+            float(map_df["longitude"].max())
+            - float(map_df["longitude"].min())
+        )
+
+        max_span = max(lat_span, lon_span)
+
+        if max_span < 0.002:
+            map_zoom = 16
+        elif max_span < 0.005:
+            map_zoom = 15
+        elif max_span < 0.01:
+            map_zoom = 14
+        elif max_span < 0.03:
+            map_zoom = 13
+        elif max_span < 0.08:
+            map_zoom = 12
+        elif max_span < 0.2:
+            map_zoom = 11
+        else:
+            map_zoom = 10
+    else:
+        map_zoom = 16
+
+    # =====================================================
+    # LAYOUT
+    # =====================================================
 
     fig.update_layout(
         map=dict(
@@ -690,26 +820,42 @@ with map_col:
                 lat=latitude_now,
                 lon=longitude_now,
             ),
-            zoom=16,
+            zoom=map_zoom,
         ),
         height=610,
-        margin=dict(l=0, r=0, t=0, b=0),
+        margin=dict(
+            l=0,
+            r=0,
+            t=0,
+            b=0,
+        ),
         paper_bgcolor="#06131e",
         legend=dict(
             orientation="h",
             x=0.01,
             y=0.02,
-            bgcolor="rgba(2,8,18,0.78)",
+            bgcolor="rgba(2,8,18,0.82)",
+            bordercolor="rgba(255,255,255,0.08)",
+            borderwidth=1,
             font=dict(
-                size=9,
+                size=10,
                 color="#d8e3ec",
             ),
         ),
+        hoverlabel=dict(
+            bgcolor="#071b2a",
+            bordercolor="#16d9ff",
+            font=dict(
+                color="white",
+                size=12,
+            ),
+        ),
+        uirevision="telemetry-map",
     )
 
     st.plotly_chart(
         fig,
-        key=f"live_map_{int(latest['id']) if 'id' in latest.index else len(df)}",
+        key=f"live_map_{int(latest['id']) if 'id' in latest.index else len(map_df)}",
         config={
             "displayModeBar": False,
             "scrollZoom": True,
